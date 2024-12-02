@@ -140,6 +140,9 @@ You can also use arguments for quick start, for example:
 ```
 
 # Get chq and chr
+
+**Untill i upload tool for auto get this data you need to get it manually by yourself.**
+
 Before start you need to install this [extension](https://chromewebstore.google.com/detail/bypass-telegram-web/jheaicmfgoefbdmadnhigbpdldafaokb)
 Then run the bot for the first time it will create profiles for your query or sessions. Open file [profiles.json](https://github.com/vanhbakaa/Tapswap/blob/main/profiles.json) to edit chq and chr
 
