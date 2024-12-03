@@ -21,10 +21,10 @@
 |---------------------------------------------------------------|:----------------:|
 | Multithreading                                                |        ✅        |
 | Proxy binding to session                                      |        ✅        |
-| Auto ref                                                      |        ✅        |
+| Auto-purchase of items if you have coins (tap, energy, charge)|        ✅        |
 | Auto tasks                                                    |        ✅        |
-| Auto play game                                                |        ✅        |
-| Auto start farming                                            |        ✅        |
+| Auto click                                                    |        ✅        |
+| Auto upgrade town                                             |        ✅        |
 | Support for pyrogram .session / Query                         |        ✅        |
 
 ## [Settings](https://github.com/vanhbakaa/Bybit-space/blob/main/.env-example)
