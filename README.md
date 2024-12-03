@@ -146,7 +146,7 @@ You can also use arguments for quick start, for example:
 Before start you need to install this [extension](https://chromewebstore.google.com/detail/bypass-telegram-web/jheaicmfgoefbdmadnhigbpdldafaokb)
 Then run the bot for the first time it will create profiles for your query or sessions. Open file [profiles.json](https://github.com/vanhbakaa/Tapswap/blob/main/profiles.json) to edit chq and chr
 
-After you run the bot for the first time profile.json file should look like this:
+After you run the bot for the first time profiles.json file should look like this:
 ![image](https://github.com/user-attachments/assets/b297499a-849c-4aec-99dd-e4c83d1947b6)
 
 
