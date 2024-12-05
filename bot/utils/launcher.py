@@ -211,7 +211,7 @@ async def run_tasks_query(query_ids: list[str]):
     accounts_gap = {}
     for query in query_ids:
         chq, chr = get_chq_chr(fetch_username(query))
-        if chq == "":
+        if chq == "" or chq is None:
             query_ids.remove(query)
         else:
             accounts_gap.update({fetch_username(query): {
@@ -244,7 +244,7 @@ async def run_tasks(tg_clients: list[Client]):
 
     for tg_client in tg_clients:
         chq, chr = get_chq_chr(tg_client.name)
-        if chq == "":
+        if chq == "" or chq is None:
             tg_clients.remove(tg_client)
         else:
             accounts_gap.update({tg_client.name: {
