@@ -64,7 +64,7 @@ def get_chq_chr(user_name):
     try:
         data = get_user_name_list()
 
-        if user_name+".json" not in data:
+        if str(user_name)+".json" not in data:
             logger.info(f"Created new profile for {user_name} in profiles, follow tutorial to edit it!")
             json_data = {
                 "chq": "",
