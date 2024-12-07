@@ -44,8 +44,15 @@ class Tapper:
                     self.session_name = json_data['username']
                     self.user_id = json_data['id']
                 except:
-                    logger.warning(f"Invaild query th: {query}")
-                    self.session_name = ""
+                    try:
+                        fetch_data = unquote(unquote(query)).split("user=")[1].split("&auth_date=")[0]
+                        json_data = json.loads(fetch_data)
+                        self.session_name = json_data['id']
+                        self.user_id = json_data['id']
+                    except:
+                        logger.warning(f"Invaild query: {query}")
+                        self.session_name = ""
+                        self.user_id = 0
 
         self.lock = lock
         self.account_gap = account_gap
@@ -278,7 +285,10 @@ class Tapper:
 
     async def process_tasks(self, http_client: aiohttp.ClientSession, profile_data) -> None:
         tasks = self.get_answer_tasks(profile_data)
-        completed_tasks = profile_data['account']['missions']['completed']
+        try:
+            completed_tasks = profile_data['account']['missions']['completed']
+        except:
+            completed_tasks = []
         for task in tasks['tasks']:
             if not task.get('items')[0].get('answer') or task.get('id') in completed_tasks:
                 continue

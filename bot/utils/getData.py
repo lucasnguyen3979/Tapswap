@@ -16,6 +16,10 @@ from importlib.metadata import version, PackageNotFoundError
 
 
 
+def get_user_name_list():
+    folder_path = "profiles/"
+    json_files = [file for file in os.listdir(folder_path) if file.endswith(".json")]
+    return json_files
 
 def init_driver():
     from seleniumwire import webdriver
@@ -124,6 +128,8 @@ def login_in_browser(auth_url: str, proxy: str, web_driver, web_service, webdriv
     return chq, chr
 
 
+
+
 def get_chq_and_chr(auth_url, proxy):
     web_driver, web_service, webdriver_path, options = init_driver()
 
@@ -131,27 +137,24 @@ def get_chq_and_chr(auth_url, proxy):
 
 
 def update(chq, chr, user_name):
-    with open("profiles.json", "r") as f:
-        data = json.load(f)
+    data = get_user_name_list()
 
-    if user_name not in list(data.keys()):
-        logger.info(f"Created new profile for {user_name} in profiles.json")
-        data.update({user_name: {
+    if user_name+".json" not in data:
+        logger.info(f"Created new profile for {user_name} in profile")
+        user_json = {
                 "chq": chq,
                 "chr": chr
-            }
-        })
-        with open("profiles.json", "w") as f:
-            json.dump(data, f, indent=4)
+        }
+        with open(f"profiles/{user_name}.json", "w") as f:
+            json.dump(user_json, f, indent=4)
 
     else:
-        data.update({user_name: {
+        user = {
             "chq": chq,
             "chr": chr
         }
-        })
-        with open("profiles.json", "w") as f:
-            json.dump(data, f, indent=4)
+        with open(f"profiles/{user_name}.json", "w") as f:
+            json.dump(user, f, indent=4)
 
 
 def process_task(thread_name, tasks):

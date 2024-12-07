@@ -94,10 +94,10 @@ class Tapper:
                 start_param=actual[0]
             ))
 
-            #tg_web_data = web_view.url.replace('tgWebAppVersion=6.7', 'tgWebAppVersion=7.2')
+            tg_web_data = web_view.url.replace('tgWebAppVersion=6.7', 'tgWebAppVersion=8.0')
             
             auth_url = web_view.url
-            # print(auth_url)
+            # print(tg_web_data)
 
             tg_web_data = unquote(
                 string=unquote(string=auth_url.split('tgWebAppData=')[1].split('&tgWebAppVersion')[0]))
@@ -335,7 +335,10 @@ class Tapper:
     
     async def process_tasks(self, http_client: aiohttp.ClientSession, profile_data) -> None:
         tasks = self.get_answer_tasks(profile_data)
-        completed_tasks = profile_data['account']['missions']['completed']
+        try:
+            completed_tasks = profile_data['account']['missions']['completed']
+        except:
+            completed_tasks = []
         for task in tasks['tasks']:
             if not task.get('items')[0].get('answer') or task.get('id') in completed_tasks:
                 continue

@@ -14,17 +14,17 @@ def fetch_username(query):
     try:
         fetch_data = unquote(query).split("user=")[1].split("&chat_instance=")[0]
         json_data = json.loads(fetch_data)
-        return json_data['username']
+        return json_data['id']
     except:
         try:
             fetch_data = unquote(query).split("user=")[1].split("&auth_date=")[0]
             json_data = json.loads(fetch_data)
-            return json_data['username']
+            return json_data['id']
         except:
             try:
                 fetch_data = unquote(unquote(query)).split("user=")[1].split("&auth_date=")[0]
                 json_data = json.loads(fetch_data)
-                return json_data['username']
+                return json_data['id']
             except:
                 logger.warning(f"Invaild query: {query}")
                 return ""
@@ -53,6 +53,11 @@ def get_un_used_proxy(used_proxies):
         if proxy not in used_proxies:
             return proxy
     return None
+
+def get_user_name_list():
+    folder_path = "profiles/"
+    json_files = [file for file in os.listdir(folder_path) if file.endswith(".json")]
+    return json_files
 
 async def get_proxy(session_name):
     if settings.USE_PROXY_FROM_FILE:
