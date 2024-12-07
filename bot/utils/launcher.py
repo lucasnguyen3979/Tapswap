@@ -310,7 +310,7 @@ async def get_data_tasks_query(query_ids: list[str]):
     user_names = get_user_name_list()
 
     for query in query_ids:
-        if fetch_username(query)+".json" in user_names:
+        if str(fetch_username(query))+".json" in user_names:
             query_ids.remove(query)
 
 
