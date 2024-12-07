@@ -139,7 +139,7 @@ def get_chq_and_chr(auth_url, proxy):
 def update(chq, chr, user_name):
     data = get_user_name_list()
 
-    if user_name+".json" not in data:
+    if str(user_name)+".json" not in data:
         logger.info(f"Created new profile for {user_name} in profile")
         user_json = {
                 "chq": chq,
