@@ -261,67 +261,86 @@ class Tapper:
 
         return filtered_tasks
 
+    async def finish_mission_item(self, http_client: aiohttp.ClientSession, task: dict, need_check=False) -> bool:
+        item = task.get("items")[0]
+        answer = item.get("answer")
+        payload = {"id": task.get("id"), "itemIndex": 0}
+        if answer == "" and item.get("require_answer") == True and need_check == True:
+            logger.info(
+                f"{self.session_name} | <yellow>No answer provided for the task <cyan>'{task.get('title')}'</cyan>.</yellow>")
+            return False
+        if answer != "" and item.get("require_answer") == True and need_check == True:
+            payload["user_input"] = answer
+
+        response = await http_client.post(
+            url='https://api.tapswap.club/api/missions/finish_mission_item',
+            json=payload
+        )
+        if response.status == 201:
+            logger.info(
+                f"{self.session_name} | <green>{ 'Finish' if need_check else 'Watch' } successfully for task <cyan>'{task.get('title')}'</cyan>.</green>")
+            return True
+        else:
+            logger.warning(f"{self.session_name} | Failed to finish mission for task '{task.get('title')}'. "
+                           f"Status: {response.status}")
+            return False
+
+    async def finish_mission(self, http_client: aiohttp.ClientSession, task: dict):
+        payload = {"id": task.get("id")}
+        response = await http_client.post(
+            url='https://api.tapswap.club/api/missions/finish_mission',
+            json=payload
+        )
+        if response.status == 201:
+            logger.info(
+                f"{self.session_name} | <green>Submit successfully for task <cyan>'{task.get('title')}'</cyan>.</green>")
+            return True
+        else:
+            logger.warning(f"{self.session_name} | Failed to submit mission for task '{task.get('title')}'. "
+                           f"Status: {response.status}")
+            return False
+
     async def complete_task(self, http_client: aiohttp.ClientSession, task: dict) -> bool:
         response_text = ''
 
         try:
             item = task.get("items")[0]
+            verified_at = item.get("verified_at")
 
             join_payload = {'id': task.get("id")}
             response = await http_client.post(
                 url='https://api.tapswap.club/api/missions/join_mission',
                 json=join_payload
             )
-            response_text = await response.text()
-            response_json = await response.json()
-            # print(response_text)
             if response.status == 201:
                 logger.success(
                     f"{self.session_name } | <green>Successfully joined <cyan>'{task.get('title')}'</cyan></green>")
+                await asyncio.sleep(randint(1, 4))
+
+            # Watch mission
+            if verified_at == None or verified_at == 0:
+                await self.finish_mission_item(http_client, task, False)
+                await asyncio.sleep(randint(1, 2))
                 return False
 
             ready_to_execute = False
-            if item.get("verified_at") > 0:
+            if verified_at > 0:
                 ready_to_execute = (
-                    datetime.time() - item.get("verified_at") / 1000) > item.get("wait_duration")
+                    (time() * 1000 - verified_at) / 1000) > item.get("wait_duration")
 
-            if ready_to_execute == False and item.get("verified_at") > 0:
+            if ready_to_execute == False and verified_at > 0:
                 return False
 
-            await asyncio.sleep(randint(1, 4))
-            # print(await response.text())
-            if (response.status == 201 or (response.status == 400 and response_json.get("message") == "mission_already_joined")) and ready_to_execute == True:
-                res_json = await response.json()
+            # Submit mission
+            if ready_to_execute == True:
+                response = await self.finish_mission_item(http_client, task, True)
+                await asyncio.sleep(randint(1, 2))
 
-                answer = item.get("answer")
-                finish_payload = {
-                    "id": task.get("id"),
-                    "itemIndex": 0
-                }
+                if response == True:
+                    response = await self.finish_mission(http_client, task)
+                    await asyncio.sleep(randint(1, 2))
 
-                if answer == "" and item.get("require_answer") == True:
-                    return False
-
-                if answer != "" and item.get("require_answer") == True:
-                    finish_payload["user_input"] = answer
-
-                response = await http_client.post(
-                    url='https://api.tapswap.club/api/missions/finish_mission_item',
-                    json=finish_payload
-                )
-                response_text = await response.text()
-                res_json = await response.json()
-
-                if response.status == 201:
-
-                    finish_mission_payload = {"id": task.get("id")}
-                    response = await http_client.post(
-                        url='https://api.tapswap.club/api/missions/finish_mission',
-                        json=finish_mission_payload
-                    )
-                    response_text = await response.text()
-
-                    if response.status == 201:
+                    if response == True:
                         status, response = await self.claim_reward(http_client, task.get("id"))
                         if status:
                             logger.info(
@@ -344,19 +363,8 @@ class Tapper:
                             logger.error(
                                 f"{self.session_name} | Failed to claim reward for task '{task.get('title')}'.")
                     else:
-                        # print(response_text)
                         logger.warning(f"{self.session_name} | Failed to finish mission for task '{task.get('title')}'. "
                                        f"Status: {response.status}")
-                else:
-                    if res_json.get('message') == "check_in_progress":
-                        logger.info(
-                            f"{self.session_name} | Check in progress trying again later...")
-                    else:
-                        logger.error(f"{self.session_name} | Failed to complete items for task '{task.get('title')}'. "
-                                     f"Status: {response.status}" + f" | Message: {res_json.get('message')}")
-            else:
-                logger.info(f"{self.session_name} | Failed to join task '{task.get('title')}': "
-                            f"Already joined this task.")
 
         except aiohttp.ClientResponseError as e:
             logger.error(f"{self.session_name} | HTTP error during task '{task.get('title')}': {e.status} {e.message}. "
@@ -380,12 +388,10 @@ class Tapper:
 
         for task in tasks["tasks"]:
             for active_task in active_missions:
-                print(active_task["items"])
                 if task["id"] == active_task.get("id"):
                     task["items"][0]["verified_at"] = active_task["items"][0].get(
                         "verified_at")
 
-        print(tasks["tasks"])
         for task in tasks['tasks']:
             if task.get('id') in completed_tasks:
                 continue
