@@ -58,7 +58,8 @@ class Tapper:
             else:
                 ref_param = settings.REF_LINK.split('=')[1]
         except:
-            logger.warning("<yellow>INVAILD REF LINK PLEASE CHECK AGAIN! (PUT YOUR REF LINK NOT REF ID)</yellow>")
+            logger.warning(
+                "<yellow>INVAILD REF LINK PLEASE CHECK AGAIN! (PUT YOUR REF LINK NOT REF ID)</yellow>")
             sys.exit()
 
         actual = random.choices([get_(), ref_param], weights=[30, 70], k=1)
@@ -94,8 +95,9 @@ class Tapper:
                 start_param=actual[0]
             ))
 
-            tg_web_data = web_view.url.replace('tgWebAppVersion=6.7', 'tgWebAppVersion=8.0')
-            
+            tg_web_data = web_view.url.replace(
+                'tgWebAppVersion=6.7', 'tgWebAppVersion=8.0')
+
             auth_url = web_view.url
             # print(tg_web_data)
 
@@ -112,13 +114,14 @@ class Tapper:
             raise error
 
         except Exception as error:
-            logger.error(f"{self.session_name} | Unknown error during Authorization: {escape_html(str(error))}")
+            logger.error(
+                f"{self.session_name} | Unknown error during Authorization: {escape_html(str(error))}")
             await asyncio.sleep(delay=3)
 
     async def login(self, http_client: aiohttp.ClientSession, tg_web_data: str, proxy: str) -> tuple[dict, str]:
         response_text = ''
 
-        payload = {   
+        payload = {
             "init_data": tg_web_data,
             "referrer": "",
             "bot_key": settings.BOT_KEY,
@@ -154,15 +157,12 @@ class Tapper:
 
                     return profile_data, access_token
 
-
-
         except Exception as error:
             logger.error(f"{self.session_name} | Unknown error while Login: {escape_html(str(error))} | "
-                        f"Response text: {escape_html(response_text)}...")
+                         f"Response text: {escape_html(response_text)}...")
             await asyncio.sleep(delay=3)
 
             return {}, ''
-
 
     async def apply_boost(self, http_client: aiohttp.ClientSession, boost_type: str) -> bool:
         response_text = ''
@@ -204,14 +204,14 @@ class Tapper:
             response_text = await response.text()
             response.raise_for_status()
 
-            return True
+            return True, await response.json()
         except Exception as error:
             logger.error(f"{self.session_name} | Unknown error when Claim {task_id} Reward: {escape_html(str(error))} | "
                          f"Response text: {escape_html(response_text)[:128]}...")
             await asyncio.sleep(delay=3)
 
-            return False
-        
+            return False, None
+
     def get_answer_tasks(self, profile_data):
         filtered_tasks = {
             "last_updated": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -226,9 +226,12 @@ class Tapper:
                 {
                     "type": item["type"],
                     "link": item.get("name"),
-                    "answer": "" 
+                    "wait_duration": item.get("wait_duration_s"),
+                    "require_answer": item.get("require_answer"),
+                    "verified_at": 0,
+                    "answer": ""
                 }
-                for item in mission["items"] if item.get("require_answer", False)
+                for item in mission["items"]
             ]
             if required_items:
                 filtered_tasks["tasks"].append({
@@ -239,7 +242,7 @@ class Tapper:
                 })
 
         file_path = "answers.json"
-        
+
         if os.path.exists(file_path):
             with open(file_path, "r") as file:
                 try:
@@ -250,17 +253,20 @@ class Tapper:
             current_data = {}
 
         for new_task in filtered_tasks["tasks"]:
-            task_title = re.sub(r'[^A-Za-z0-9]+', ' ', new_task.get("title")).strip().lower()
-            if task_title in list(current_data.keys()):
+            task_title = re.sub(r'[^A-Za-z0-9]+', ' ',
+                                new_task.get("title")).strip().lower()
+            if task_title in list(current_data.keys()) and new_task["items"][0]['require_answer'] == True:
                 new_task["items"][0]['answer'] = current_data.get(task_title)
+                break
 
-        # print(filtered_tasks)
         return filtered_tasks
-    
+
     async def complete_task(self, http_client: aiohttp.ClientSession, task: dict) -> bool:
         response_text = ''
 
         try:
+            item = task.get("items")[0]
+
             join_payload = {'id': task.get("id")}
             response = await http_client.post(
                 url='https://api.tapswap.club/api/missions/join_mission',
@@ -270,21 +276,35 @@ class Tapper:
             response_json = await response.json()
             # print(response_text)
             if response.status == 201:
-                logger.success(f"{self.session_name } | <green>Successfully joined <cyan>'{task.get('title')}'</cyan></green>")
+                logger.success(
+                    f"{self.session_name } | <green>Successfully joined <cyan>'{task.get('title')}'</cyan></green>")
                 return False
 
-            await asyncio.sleep(2)
+            ready_to_execute = False
+            if item.get("verified_at") > 0:
+                ready_to_execute = (
+                    datetime.time() - item.get("verified_at") / 1000) > item.get("wait_duration")
+
+            if ready_to_execute == False and item.get("verified_at") > 0:
+                return False
+
+            await asyncio.sleep(randint(1, 4))
             # print(await response.text())
-            if response.status == 201 or (response.status == 400 and response_json.get("message") == "mission_already_joined"):
+            if (response.status == 201 or (response.status == 400 and response_json.get("message") == "mission_already_joined")) and ready_to_execute == True:
                 res_json = await response.json()
 
-                if task.get("items")[0].get("answer") == "":
-                    return False
+                answer = item.get("answer")
                 finish_payload = {
                     "id": task.get("id"),
-                    "itemIndex": 0,
-                    "user_input": task.get("items")[0].get("answer")
+                    "itemIndex": 0
                 }
+
+                if answer == "" and item.get("require_answer") == True:
+                    return False
+
+                if answer != "" and item.get("require_answer") == True:
+                    finish_payload["user_input"] = answer
+
                 response = await http_client.post(
                     url='https://api.tapswap.club/api/missions/finish_mission_item',
                     json=finish_payload
@@ -302,56 +322,84 @@ class Tapper:
                     response_text = await response.text()
 
                     if response.status == 201:
-                        if await self.claim_reward(http_client, task.get("id")):
-                            logger.info(f"{self.session_name} | <green>Reward claimed successfully for task <cyan>'{task.get('title')}'</cyan>.</green>")
+                        status, response = await self.claim_reward(http_client, task.get("id"))
+                        if status:
+                            logger.info(
+                                f"{self.session_name} | <green>Reward claimed successfully for task <cyan>'{task.get('title')}'</cyan>.</green>")
+                            claims = response['player']['claims']
+                            if claims:
+                                for task_id in claims:
+                                    if task_id != "CINEMA":
+                                        logger.info(
+                                            f"{self.session_name} | Sleep 5s before claim <m>{task_id}</m> reward")
+                                        await asyncio.sleep(delay=5)
+                                        status = await self.claim_reward(http_client=http_client, task_id=task_id)
+                                        if status is True:
+                                            logger.success(
+                                                f"{self.session_name} | Successfully claim <m>{task_id}</m> reward")
+                                            await asyncio.sleep(delay=1)
+
                             return True
                         else:
-                            logger.error(f"{self.session_name} | Failed to claim reward for task '{task.get('title')}'.")
+                            logger.error(
+                                f"{self.session_name} | Failed to claim reward for task '{task.get('title')}'.")
                     else:
                         # print(response_text)
                         logger.warning(f"{self.session_name} | Failed to finish mission for task '{task.get('title')}'. "
-                                    f"Status: {response.status}")
+                                       f"Status: {response.status}")
                 else:
                     if res_json.get('message') == "check_in_progress":
-                        logger.info(f"{self.session_name} | Check in progress trying again later...")
+                        logger.info(
+                            f"{self.session_name} | Check in progress trying again later...")
                     else:
                         logger.error(f"{self.session_name} | Failed to complete items for task '{task.get('title')}'. "
-                                f"Status: {response.status}" + f" | Message: {res_json.get('message')}")
+                                     f"Status: {response.status}" + f" | Message: {res_json.get('message')}")
             else:
                 logger.info(f"{self.session_name} | Failed to join task '{task.get('title')}': "
                             f"Already joined this task.")
 
         except aiohttp.ClientResponseError as e:
             logger.error(f"{self.session_name} | HTTP error during task '{task.get('title')}': {e.status} {e.message}. "
-                        f"Response text: {escape_html(response_text)[:128]}...")
+                         f"Response text: {escape_html(response_text)[:128]}...")
         except Exception as error:
             logger.error(f"{self.session_name} | Unknown error during task '{task.get('title')}': {escape_html(str(error))}. "
-                        f"Response text: {escape_html(response_text)[:128]}...")
+                         f"Response text: {escape_html(response_text)[:128]}...")
         finally:
             await asyncio.sleep(3)
 
         return False
 
-    
     async def process_tasks(self, http_client: aiohttp.ClientSession, profile_data) -> None:
         tasks = self.get_answer_tasks(profile_data)
         try:
             completed_tasks = profile_data['account']['missions']['completed']
+            active_missions = profile_data['account']['missions']['active']
         except:
             completed_tasks = []
+            active_missions = []
+
+        for task in tasks["tasks"]:
+            for active_task in active_missions:
+                print(active_task["items"])
+                if task["id"] == active_task.get("id"):
+                    task["items"][0]["verified_at"] = active_task["items"][0].get(
+                        "verified_at")
+
+        print(tasks["tasks"])
         for task in tasks['tasks']:
-            if not task.get('items')[0].get('answer') or task.get('id') in completed_tasks:
+            if task.get('id') in completed_tasks:
                 continue
-            logger.info(f"{self.session_name} | Processing task '{task.get('title')}'...")
+            logger.info(
+                f"{self.session_name} | Processing task '{task.get('title')}'...")
             await self.complete_task(http_client, task)
-        
         logger.info(f"{self.session_name} | All tasks processed.")
 
     async def send_taps(self, http_client: aiohttp.ClientSession, taps: int) -> dict[str]:
         response_text = ''
         try:
             timestamp = int(time() * 1000)
-            content_id = int((timestamp * self.user_id * self.user_id / self.user_id) % self.user_id % self.user_id)
+            content_id = int((timestamp * self.user_id * self.user_id /
+                             self.user_id) % self.user_id % self.user_id)
 
             json_data = {'taps': taps, 'time': timestamp}
 
@@ -376,7 +424,8 @@ class Tapper:
             ip = (await response.json()).get('origin')
             logger.info(f"{self.session_name} | Proxy IP: {ip}")
         except Exception as error:
-            logger.error(f"{self.session_name} | Proxy: {proxy} | Error: {escape_html(str(error))}")
+            logger.error(
+                f"{self.session_name} | Proxy: {proxy} | Error: {escape_html(str(error))}")
 
     async def run(self, proxy: str | None, ua: str) -> None:
         global tap_prices, energy_prices, profile_data, balance, charge_prices
@@ -419,7 +468,8 @@ class Tapper:
                                 proxy_conn.close()
 
                         proxy_conn = ProxyConnector().from_url(proxy) if proxy else None
-                        http_client = aiohttp.ClientSession(headers=headers, connector=proxy_conn)
+                        http_client = aiohttp.ClientSession(
+                            headers=headers, connector=proxy_conn)
 
                     if time() - access_token_created_time >= 1800:
                         profile_data, access_token = await self.login(http_client=http_client,
@@ -436,12 +486,12 @@ class Tapper:
                         if settings.DO_TASKS is True:
                             await self.process_tasks(http_client, profile_data)
 
-
                         tap_bot = profile_data['player']['tap_bot']
                         if tap_bot:
                             bot_earned = profile_data['bot_shares']
 
-                            logger.success(f"{self.session_name} | Tap bot earned +{bot_earned:,} coins!")
+                            logger.success(
+                                f"{self.session_name} | Tap bot earned +{bot_earned:,} coins!")
 
                         balance = profile_data['player']['shares']
 
@@ -455,22 +505,26 @@ class Tapper:
                         claims = profile_data['player']['claims']
                         if claims:
                             for task_id in claims:
-                                logger.info(f"{self.session_name} | Sleep 5s before claim <m>{task_id}</m> reward")
+                                logger.info(
+                                    f"{self.session_name} | Sleep 5s before claim <m>{task_id}</m> reward")
                                 await asyncio.sleep(delay=5)
 
                                 status = await self.claim_reward(http_client=http_client, task_id=task_id)
                                 if status is True:
-                                    logger.success(f"{self.session_name} | Successfully claim <m>{task_id}</m> reward")
+                                    logger.success(
+                                        f"{self.session_name} | Successfully claim <m>{task_id}</m> reward")
 
                                     await asyncio.sleep(delay=1)
 
                     if settings.AUTO_UPGRADE_TOWN is True:
-                        logger.info(f"{self.session_name} | Sleep 15s before upgrade Build")
+                        logger.info(
+                            f"{self.session_name} | Sleep 15s before upgrade Build")
                         await asyncio.sleep(delay=15)
 
                         status = await build_town(self, http_client=http_client, profile_data=profile_data)
                         if status is True:
-                            logger.success(f"{self.session_name} | <le>Build is update...</le>")
+                            logger.success(
+                                f"{self.session_name} | <le>Build is update...</le>")
                             await http_client.close()
                             if proxy_conn:
                                 if not proxy_conn.closed:
@@ -479,9 +533,11 @@ class Tapper:
                             continue
 
                     get_answer_tasks = self.get_answer_tasks(profile_data)
-                    logger.info(f"{self.session_name} | Tasks count: {len(get_answer_tasks['tasks'])}")
+                    logger.info(
+                        f"{self.session_name} | Tasks count: {len(get_answer_tasks['tasks'])}")
 
-                    taps = randint(a=settings.RANDOM_TAPS_COUNT[0], b=settings.RANDOM_TAPS_COUNT[1])
+                    taps = randint(
+                        a=settings.RANDOM_TAPS_COUNT[0], b=settings.RANDOM_TAPS_COUNT[1])
 
                     if active_turbo:
                         taps += settings.ADD_TAPS_ON_TURBO
@@ -514,24 +570,28 @@ class Tapper:
                         if (energy_boost_count > 0
                                 and available_energy < settings.MIN_AVAILABLE_ENERGY
                                 and settings.APPLY_DAILY_ENERGY is True):
-                            logger.info(f"{self.session_name} | Sleep 5s before activating the daily energy boost")
+                            logger.info(
+                                f"{self.session_name} | Sleep 5s before activating the daily energy boost")
                             await asyncio.sleep(delay=5)
 
                             status = await self.apply_boost(http_client=http_client, boost_type="energy")
                             if status is True:
-                                logger.success(f"{self.session_name} | Energy boost applied")
+                                logger.success(
+                                    f"{self.session_name} | Energy boost applied")
 
                                 await asyncio.sleep(delay=1)
 
                             continue
 
                         if turbo_boost_count > 0 and settings.APPLY_DAILY_TURBO is True:
-                            logger.info(f"{self.session_name} | Sleep 5s before activating the daily turbo boost")
+                            logger.info(
+                                f"{self.session_name} | Sleep 5s before activating the daily turbo boost")
                             await asyncio.sleep(delay=5)
 
                             status = await self.apply_boost(http_client=http_client, boost_type="turbo")
                             if status is True:
-                                logger.success(f"{self.session_name} | Turbo boost applied")
+                                logger.success(
+                                    f"{self.session_name} | Turbo boost applied")
 
                                 await asyncio.sleep(delay=1)
 
@@ -543,12 +603,14 @@ class Tapper:
                         if (settings.AUTO_UPGRADE_TAP is True
                                 and balance > tap_prices.get(next_tap_level, 0)
                                 and next_tap_level <= settings.MAX_TAP_LEVEL):
-                            logger.info(f"{self.session_name} | Sleep 5s before upgrade tap to {next_tap_level} lvl")
+                            logger.info(
+                                f"{self.session_name} | Sleep 5s before upgrade tap to {next_tap_level} lvl")
                             await asyncio.sleep(delay=5)
 
                             status = await self.upgrade_boost(http_client=http_client, boost_type="tap")
                             if status is True:
-                                logger.success(f"{self.session_name} | Tap upgraded to {next_tap_level} lvl")
+                                logger.success(
+                                    f"{self.session_name} | Tap upgraded to {next_tap_level} lvl")
 
                                 await asyncio.sleep(delay=1)
 
@@ -563,7 +625,8 @@ class Tapper:
 
                             status = await self.upgrade_boost(http_client=http_client, boost_type="energy")
                             if status is True:
-                                logger.success(f"{self.session_name} | Energy upgraded to {next_energy_level} lvl")
+                                logger.success(
+                                    f"{self.session_name} | Energy upgraded to {next_energy_level} lvl")
 
                                 await asyncio.sleep(delay=1)
 
@@ -578,7 +641,8 @@ class Tapper:
 
                             status = await self.upgrade_boost(http_client=http_client, boost_type="charge")
                             if status is True:
-                                logger.success(f"{self.session_name} | Charge upgraded to {next_charge_level} lvl")
+                                logger.success(
+                                    f"{self.session_name} | Charge upgraded to {next_charge_level} lvl")
 
                                 await asyncio.sleep(delay=1)
 
@@ -590,10 +654,13 @@ class Tapper:
                                 if not proxy_conn.closed:
                                     proxy_conn.close()
 
-                            random_sleep = randint(settings.SLEEP_BY_MIN_ENERGY[0], settings.SLEEP_BY_MIN_ENERGY[1])
+                            random_sleep = randint(
+                                settings.SLEEP_BY_MIN_ENERGY[0], settings.SLEEP_BY_MIN_ENERGY[1])
 
-                            logger.info(f"{self.session_name} | Minimum energy reached: {available_energy}")
-                            logger.info(f"{self.session_name} | Sleep {random_sleep:,}s")
+                            logger.info(
+                                f"{self.session_name} | Minimum energy reached: {available_energy}")
+                            logger.info(
+                                f"{self.session_name} | Sleep {random_sleep:,}s")
 
                             await asyncio.sleep(delay=random_sleep)
 
@@ -606,11 +673,13 @@ class Tapper:
                 raise error
 
             except Exception as error:
-                logger.error(f"{self.session_name} | Unknown error: {escape_html(str(error))}")
+                logger.error(
+                    f"{self.session_name} | Unknown error: {escape_html(str(error))}")
                 await asyncio.sleep(delay=3)
 
             else:
-                sleep_between_clicks = randint(a=settings.SLEEP_BETWEEN_TAP[0], b=settings.SLEEP_BETWEEN_TAP[1])
+                sleep_between_clicks = randint(
+                    a=settings.SLEEP_BETWEEN_TAP[0], b=settings.SLEEP_BETWEEN_TAP[1])
 
                 if active_turbo is True:
                     sleep_between_clicks = 4
@@ -620,9 +689,11 @@ class Tapper:
 
 
 def get_():
-    actual_code = random.choices(["cl82NjI0NTIzMjcw", "aaouhfawskd", "ajwduwifaf"], weights=[100, 0, 0], k=1)
+    actual_code = random.choices(
+        ["cl82NjI0NTIzMjcw", "aaouhfawskd", "ajwduwifaf"], weights=[100, 0, 0], k=1)
     abasdowiad = base64.b64decode(actual_code[0])
-    waijdioajdioajwdwioajdoiajwodjawoidjaoiwjfoiajfoiajfojaowfjaowjfoajfojawofjoawjfioajwfoiajwfoiajwfadawoiaaiwjaijgaiowjfijawtext = abasdowiad.decode("utf-8")
+    waijdioajdioajwdwioajdoiajwodjawoidjaoiwjfoiajfoiajfojaowfjaowjfoajfojawofjoawjfioajwfoiajwfoiajwfadawoiaaiwjaijgaiowjfijawtext = abasdowiad.decode(
+        "utf-8")
 
     return waijdioajdioajwdwioajdoiajwodjawoidjaoiwjfoiajfoiajfojaowfjaowjfoajfojawofjoawjfioajwfoiajwfoiajwfadawoiaaiwjaijgaiowjfijawtext
 
@@ -630,8 +701,10 @@ def get_():
 async def run_tapper(tg_client: Client, proxy: str | None, lock: asyncio.Lock, account_gap: dict, ua: str, wait=False):
     try:
         if wait:
-            sleep_time = random.randint(settings.RANDOM_SLEEP_BEFORE_START[0], settings.RANDOM_SLEEP_BEFORE_START[1])
-            logger.info(f"{tg_client.name} | Sleep <c>{sleep_time}</c> seconds before start.")
+            sleep_time = random.randint(
+                settings.RANDOM_SLEEP_BEFORE_START[0], settings.RANDOM_SLEEP_BEFORE_START[1])
+            logger.info(
+                f"{tg_client.name} | Sleep <c>{sleep_time}</c> seconds before start.")
             await asyncio.sleep(sleep_time)
 
         await Tapper(tg_client=tg_client, lock=lock, account_gap=account_gap).run(proxy=proxy, ua=ua)
