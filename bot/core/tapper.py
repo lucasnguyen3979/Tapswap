@@ -261,16 +261,17 @@ class Tapper:
 
         return filtered_tasks
 
-    async def finish_mission_item(self, http_client: aiohttp.ClientSession, task: dict, need_check=False) -> bool:
+    async def finish_mission_item(self, http_client: aiohttp.ClientSession, task: dict, watch=False, check_answer=False) -> bool:
         item = task.get("items")[0]
         answer = item.get("answer")
         payload = {"id": task.get("id"), "itemIndex": 0}
-        if answer == "" and item.get("require_answer") == True and need_check == True:
-            logger.info(
-                f"{self.session_name} | <yellow>No answer provided for the task <cyan>'{task.get('title')}'</cyan>.</yellow>")
-            return False
-        if answer != "" and item.get("require_answer") == True and need_check == True:
-            payload["user_input"] = answer
+        if watch == False:
+            if answer == "" and item.get("require_answer") == True and check_answer == True:
+                logger.info(
+                    f"{self.session_name} | <yellow>No answer provided for the task <cyan>'{task.get('title')}'</cyan>.</yellow>")
+                return False
+            if answer != "" and item.get("require_answer") == True and check_answer == True:
+                payload["user_input"] = answer
 
         response = await http_client.post(
             url='https://api.tapswap.club/api/missions/finish_mission_item',
@@ -278,7 +279,7 @@ class Tapper:
         )
         if response.status == 201:
             logger.info(
-                f"{self.session_name} | <green>{ 'Finish' if need_check else 'Watch' } successfully for task <cyan>'{task.get('title')}'</cyan>.</green>")
+                f"{self.session_name} | <green>{ 'Finish' if check_answer else 'Watch' } successfully for task <cyan>'{task.get('title')}'</cyan>.</green>")
             return True
         else:
             logger.warning(f"{self.session_name} | Failed to finish mission for task '{task.get('title')}'. "
@@ -319,7 +320,7 @@ class Tapper:
 
             # Watch mission
             if verified_at == None or verified_at == 0:
-                await self.finish_mission_item(http_client, task, False)
+                await self.finish_mission_item(http_client, task, True, False)
                 await asyncio.sleep(randint(1, 2))
                 return False
 
@@ -333,7 +334,7 @@ class Tapper:
 
             # Submit mission
             if ready_to_execute == True:
-                response = await self.finish_mission_item(http_client, task, True)
+                response = await self.finish_mission_item(http_client, task, False, True)
                 await asyncio.sleep(randint(1, 2))
 
                 if response == True:
