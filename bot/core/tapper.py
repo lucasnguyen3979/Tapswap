@@ -352,7 +352,6 @@ class Tapper:
                                     if task_id != "CINEMA":
                                         logger.info(
                                             f"{self.session_name} | Sleep 5s before claim <m>{task_id}</m> reward")
-                                        await asyncio.sleep(delay=5)
                                         status = await self.claim_reward(http_client=http_client, task_id=task_id)
                                         if status is True:
                                             logger.success(
@@ -514,8 +513,6 @@ class Tapper:
                             for task_id in claims:
                                 logger.info(
                                     f"{self.session_name} | Sleep 5s before claim <m>{task_id}</m> reward")
-                                await asyncio.sleep(delay=5)
-
                                 status = await self.claim_reward(http_client=http_client, task_id=task_id)
                                 if status is True:
                                     logger.success(
